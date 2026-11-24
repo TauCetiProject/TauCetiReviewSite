@@ -32,12 +32,17 @@ def write(path: Path, data) -> None:
 
 
 def write_packed(path: Path, data) -> Path:
-    """A file that only the site's own pages read, gzipped at `<path>.gz` (web/data.js unpacks it): GitHub Pages
-    serves at most 1 GB, and on 2026-11-20 the site was 958 MB against a budget of 950. Only the files of the
-    modules outside the library (data/u/) are written this way. The library's own module files (data/m/, 553 MB)
-    are plain JSON like everything else other readers fetch by its URL (meta.json, names/, nodes/, standard/):
-    mathlib-quality's scripts/review_site.py reads a declaration's records from data/m/<n>.json, and gzipping
-    them for three hours on 2026-11-20 broke it. The gzip carries no time, so the same data gives the same file."""
+    """A module's file, gzipped at `<path>.gz` (web/data.js unpacks it): GitHub Pages serves at most 1 GB. Built
+    from the dataset of 5b5d5152e4ad (2026-11-24) with the library's module files (data/m/) as plain JSON, the
+    site was 1145 MB, 693 MB of it those files; gzipped they are 170 MB, and the site 622 MB. The files of the
+    modules outside the library (data/u/, 42 MB plain on 2026-11-20) are a quarter of that gzipped.
+
+    Other readers fetch a module's file by its URL: mathlib-quality's scripts/review_site.py reads a declaration's
+    records, signature and lines from data/m/<n>.json, and the signatures of what it rests on outside the library
+    from data/u/<n>.json. It reads the packed file because its `get` asks for `<path>.gz` when `<path>` is not
+    there; a reader that asks only for `<path>` answers 404, as that helper did for three hours on 2026-11-20 when
+    data/m/ was first packed. Every other file (meta.json, names/, nodes/, standard/, modules.json and the rest)
+    stays plain JSON. The gzip carries no time, so the same data gives the same file."""
     path = path.with_name(path.name + ".gz")
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -62,7 +67,7 @@ def build(dataset: Path, store: Path, out: Path, settings: dict, source: Path | 
     for k, reviews in site.standard_shards().items():
         write(data / "standard" / f"{k}.json", reviews)
     for mi in range(site.project_modules):
-        write(data / "m" / f"{mi}.json", site.module_file(mi))
+        write_packed(data / "m" / f"{mi}.json", site.module_file(mi))
     for mi in range(site.project_modules, len(site.modules)):
         write_packed(data / "u" / f"{mi}.json", site.outside_module_file(mi))
     write(data / "modules.json", site.modules)
