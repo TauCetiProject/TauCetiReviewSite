@@ -33,10 +33,9 @@ def tearDownModule():
 
 
 def data(path: str, root: Path | None = None):
-    """A file of the built site's data, parsed. The file of a module outside the library (`u/`) is on disk
-    gzipped, as `<path>.gz`."""
+    """A file of the built site's data, parsed. A module's file (`m/`, `u/`) is on disk gzipped, as `<path>.gz`."""
     file = (root or OUT / "site") / "data" / path
-    if path.startswith("u/"):
+    if path.startswith(("m/", "u/")):
         return json.loads(gzip.decompress(file.with_name(file.name + ".gz").read_bytes()))
     return json.loads(file.read_text(encoding="utf-8"))
 
@@ -79,21 +78,31 @@ class MetaTests(unittest.TestCase):
         self.assertEqual([(i["name"], i["commit"]) for i in m["imports"]], [("Test imports", "c0ffee")])
         self.assertEqual(m["areas"], [["Basic", 15, 1], ["Uses", 4, 1], ["Notation", 2, 0]])
 
-    def test_only_the_files_of_outside_modules_are_gzipped(self):
-        # (2026-11-20) Over the budget, the site was built with data/m/ and data/u/ gzipped: mathlib-quality's
-        # scripts/review_site.py, which reads a declaration's records from data/m/<n>.json, answered 404 for three
-        # hours. What other readers fetch by its URL stays plain JSON, the library's module files among it.
+    def test_only_the_module_files_are_gzipped(self):
+        # (2026-11-24) With data/m/ plain the site was 1145 MB against a budget of 950; gzipped it is 622 MB.
+        # mathlib-quality's scripts/review_site.py reads data/m/<n>.json and data/u/<n>.json from `<path>.gz` when
+        # `<path>` is not there; one that did not answered 404 for three hours on 2026-11-20. What other readers
+        # fetch by its URL and nothing else stays plain JSON.
         root = OUT / "site" / "data"
         packed = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.gz"))
-        self.assertTrue(packed and all(p.startswith("u/") and p.endswith(".json.gz") for p in packed), packed[:5])
-        self.assertEqual([p.name for p in (root / "u").iterdir() if p.suffix != ".gz"], [])
-        self.assertTrue(list((root / "m").glob("*.json")) and not list((root / "m").glob("*.gz")))
-        self.assertIn("decls", json.loads(next(iter(sorted((root / "m").glob("*.json")))).read_text(encoding="utf-8")))
-        for plain in ("meta.json", "modules.json", "names/0.json", "nodes/0.json", "standard/0.json"):
+        self.assertTrue(packed and all(p.startswith(("m/", "u/")) and p.endswith(".json.gz") for p in packed), packed[:5])
+        self.assertEqual([p.name for d in ("m", "u") for p in (root / d).iterdir() if p.suffix != ".gz"], [])
+        self.assertTrue(list((root / "m").glob("*.json.gz")) and list((root / "u").glob("*.json.gz")))
+        for plain in ("meta.json", "modules.json", "names/0.json", "nodes/0.json", "standard/0.json", "upstream.json"):
             json.loads((root / plain).read_text(encoding="utf-8"))
         first = root / packed[0]
         self.assertEqual(first.read_bytes()[:2], b"\x1f\x8b")
         self.assertIn("decls", json.loads(gzip.decompress(first.read_bytes())))
+
+    def test_a_library_module_file_has_what_review_site_reads(self):
+        # What mathlib-quality's scripts/review_site.py reads of data/m/<n>.json, unpacked: the module's path, and of
+        # each entry its id, its records, its first and last line and its signature (or its statement).
+        f = module_of("Fixture.triple_pos")
+        e = next(e for e in f["decls"] if e["id"] == node_id("Fixture.triple_pos"))
+        self.assertTrue(f["path"])
+        self.assertTrue(e["records"] and all("kind" in v and "by" in v for v in e["records"]))
+        self.assertEqual(len(e["line"]), 2)
+        self.assertTrue(e.get("sig") or e.get("stmt"))
         again = build_site.write_packed(OUT / "again" / "x.json", {"a": 1})
         self.assertEqual(again.read_bytes(), build_site.write_packed(OUT / "again2" / "x.json", {"a": 1}).read_bytes())
 
