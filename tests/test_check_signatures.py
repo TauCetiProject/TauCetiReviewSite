@@ -57,6 +57,14 @@ class UntypedTests(unittest.TestCase):
         # Printed as written, in the docs too: `(le : α → α → Bool := by exact fun a b => a ≤ b)`.
         self.assertIsNone(cs.untyped("List.mergeSort (xs : List α) (le : α → α → Bool := by exact fun a b => decide (a ≤ b)) : List α"))
         self.assertEqual(cs.untyped("(f : α → β := fun x => x) : ∃ y, p y"), "fun x =>")
+        # a binder in brackets of its own inside the default tactic is printed as written too
+        nested = ("TauCeti.ιCategorySimplicial_congr (M : C ⥤ A) {n : ℕ} {σ₁ σ₂ : ComposableArrows C n} (h : σ₁ = σ₂) "
+                  "(h0 : σ₁.obj 0 = σ₂.obj 0 := by exact congrArg (fun τ ↦ τ.obj 0) h) : "
+                  "ιCategorySimplicial M σ₁ = eqToHom ⋯ ≫ ιCategorySimplicial M σ₂")
+        self.assertIsNone(cs.untyped(nested))
+        # outside the default tactic the same binder is still one without its type
+        self.assertEqual(cs.untyped("(h : a = b := by simp) : g = congrArg (fun τ ↦ τ.obj 0) h"), "fun τ ↦")
+        self.assertEqual(cs.untyped("(f : (fun τ ↦ τ) = g) (h : a = b := by simp) : p"), "fun τ ↦")
 
     def test_the_signature_the_site_showed(self):
         self.assertEqual(cs.untyped(WRONG), "∃ V,")

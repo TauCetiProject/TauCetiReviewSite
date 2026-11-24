@@ -57,18 +57,21 @@ BLOB = re.compile(r"/blob/([0-9a-f]{40})/")
 
 def untyped(text: str) -> str | None:
     """The first binder printed without its type, if there is one: not one in an argument's default
-    tactic (`(le : α → α → Bool := by exact fun a b => a ≤ b)`), which is printed as written."""
+    tactic (`(le : α → α → Bool := by exact fun a b => a ≤ b)`), which is printed as written, at any
+    depth of brackets inside it (`(h0 : a = b := by exact congrArg (fun τ ↦ τ.obj 0) h)`)."""
     for m in UNTYPED.finditer(text):
-        depth, start = 0, 0
-        for i in range(m.start() - 1, -1, -1):  # the bracket that encloses it
+        depth, tactic = 0, False
+        for i in range(m.start() - 1, -1, -1):  # each bracket that encloses it, innermost first
             if text[i] in ")]}⟩⦄":
                 depth += 1
             elif text[i] in "([{⟨⦃":
                 if depth == 0:
-                    start = i
-                    break
-                depth -= 1
-        if ":= by" not in text[start:m.start()]:
+                    if ":= by" in text[i:m.start()]:
+                        tactic = True
+                        break
+                else:
+                    depth -= 1
+        if not tactic:
             return m.group(0)
     return None
 
