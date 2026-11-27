@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,6 +26,7 @@ from evidence_core.store import Store, with_imports
 
 import standard
 from common import fnv_shard, header
+from compact import CompactDataset
 
 NODE_SHARD = 2048
 NAME_SHARDS = 64
@@ -156,7 +158,7 @@ class Inputs:
 def load(dataset: Path, store: Path, imports: Path | None, source: Path | None, settings: dict) -> Inputs:
     """The dataset, the store and the stores it imports (fetched into ``imports`` by
     `evidence-store fetch-imports`), resolved by evidence-core."""
-    ds = Dataset.load(dataset)
+    ds = CompactDataset.load(dataset)
     st = Store.load(store)
     if imports is not None and st.imports:
         imp = with_imports(st, imports)
@@ -164,8 +166,19 @@ def load(dataset: Path, store: Path, imports: Path | None, source: Path | None, 
     else:
         records, sources, read = st.records, {}, []
     ev = Evidence.resolve(records, ds, sources=sources)
-    return Inputs(ds=ds, ev=ev, store=st, imports=read, sources=Sources(source), settings=settings,
+    return Inputs(ds=ds, ev=ev, store=st, imports=read, sources=OneSource(source), settings=settings,
                   commit_date=commit_date(source, ds.commit))
+
+
+class OneSource(Sources):
+    """The library's source files, one held at a time: the last one read. evidence-core's `Sources` keeps every file
+    it has read, which for a build that reads them all was 1.4 GB at 2a9233e5be32 (2026-11-27); the build asks for
+    them module by module (`Site.module_file`), and a module's declarations are in its own file."""
+
+    def lines(self, path: str) -> list[str] | None:
+        if path not in self._files:
+            self._files.clear()
+        return super().lines(path)
 
 
 def commit_date(source: Path | None, commit: str) -> str:
@@ -198,7 +211,7 @@ class Site:
         self.docstrings = {name: rows[0].get("text", "") for name, rows in ds.facet("docstring").items()}
         self.sorry = {name for name, rows in ds.facet("axioms").items() if rows[0].get("sorry")}
         # The roadmap each declaration of the library belongs to (scripts/roadmaps.py), where it has one.
-        self.roadmaps = {name: rows[0]["roadmap"] for name, rows in ds.facet("roadmap").items()}
+        self.roadmaps = {name: sys.intern(rows[0]["roadmap"]) for name, rows in ds.facet("roadmap").items()}
         self.named = self._named()
         self.mdocs = docs_mod.module_docs(ds)
         self.project_modules = len(ds.modules)
