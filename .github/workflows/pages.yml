@@ -61,6 +61,20 @@ jobs:
           evidence-store fetch-imports --store evidence --out "$RUNNER_TEMP/imports"
       - name: No signature prints a binder without its type
         run: python scripts/check_signatures.py --dataset "$RUNNER_TEMP/dataset" --offline
+      # The build holds the whole dataset in memory. On the dataset of 2a9233e5be32 (2026-11-27, 642,550
+      # declarations) it peaked at 17.9 GB, measured locally, and the hosted runner has 16 GB: every build since
+      # the evening of 2026-11-26 was killed about 54 minutes in ("the hosted runner lost communication"), where
+      # the build itself takes five to nine minutes. Swap on the runner's scratch disk gives it room until the
+      # build is made to hold less.
+      - name: Swap for the build
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 24G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile > /dev/null
+          sudo swapon /mnt/swapfile
+          free -g
       - name: Build
         run: python scripts/build_site.py --dataset "$RUNNER_TEMP/dataset" --source "$RUNNER_TEMP/TauCeti" --imports "$RUNNER_TEMP/imports" --out _site
       - name: The browser check, on the build
