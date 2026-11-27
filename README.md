@@ -290,7 +290,8 @@ without the facet, and the Reviewed page has no roadmap filter until the next on
   fixer find them under either (`scripts/common.py`, `origin_key`), so that none is recorded twice.
 - `data/voyager.jsonl`: every announcement Voyager has made.
 - `scripts/`: `pin.py`, `extractor.py`, `prune.py`, `voyager.py`, `label_issue.py`; `site_data.py`
-  (everything a page shows, from evidence-core) and `build_site.py` (writes `_site/`);
+  (everything a page shows, from evidence-core) and `build_site.py` (writes `_site/`), with `compact.py`
+  (the dataset as the build holds it, a row and a file at a time: evidence-core's own way took 17.9 GB);
   `standard.py` (the standard review: its three parts, its version, the check an edit must pass, the
   cells of a tick, and which version is current and who approved it), `standard_intake.py` (the bulk
   issue read our way: approvals, writes, edits and restores) and `evidence_intake.py` (our intake:
